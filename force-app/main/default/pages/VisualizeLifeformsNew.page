@@ -1,0 +1,15 @@
+<apex:page controller="VisualizeController">
+
+<style type="text/css">
+</style>
+
+<script type="text/javascript">
+// This page runs - is blank as you can see
+
+</script>
+    <div style="width:7000px; height:7000px;">
+
+    <canvas id="myCanvas" style="position:absolute; width:6000px; height:6000px; z-index:200;" height="6000px" width="6000px"></canvas>
+    </div>
+
+</apex:page>

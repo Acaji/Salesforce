@@ -1,0 +1,360 @@
+<apex:page controller="VisualizeController">
+
+<style type="text/css">
+</style>
+
+<script type="text/javascript">
+// This page runs - 25x25 
+    // global variables
+    var
+        
+        previousOnload = window.onload,
+        circleRadius = 18,
+        circleOutline = 2,
+        OutlineColor = '#000000',
+        gridX = 75,
+        gridY = 75,
+        aliveColor = "#FF00FF",            // green
+        deadColor = "#FFFFFF", //"#888888",             // grey
+        radians45 = (45 * Math.PI) / 180,
+        segment = .18,
+        globalCenter = 0,
+        globalSpace = 0,
+        rainbow = // red orange yellow green blue indigo violet umber
+        [ 
+            "#ff0000",
+            "#ff6600",
+            "#ffff33",
+            "#339933",
+            "#3300ff",
+            "#6600cc",
+            "#9900cc",
+            "#996699"
+        ],
+        cycleColors = false,
+        colorIndex = 0,
+        tick = 100,
+        
+        // the Lifeform wrapper from the controller - the Lifeform getter returns a list of these
+        // a Lifeform has:
+        //        Position                me;   (x,y)
+        //        List<Position>          Neighbors;  8 by (x,y)
+        //        List<Integer>           NeighborIndx;
+        //        Boolean                 nextState;
+        //        Boolean                 alive;
+        theEcosystem;
+        
+    window.onload = function()
+    {
+        if ( previousOnload ) previousOnload();
+        globalCenter = 200; //1700;
+        globalSpace = 56;
+        theEcosystem = {!Lifeforms};
+        displayEcoSystem( globalCenter, globalSpace );
+        var myVar = setInterval( function() {updateAndDisplayEcoSystem( globalCenter, globalSpace )}, tick);
+    }
+    
+    function setNextState(  )
+    {
+        if ( theEcosystem == null ) theEcosystem = {!Lifeforms};
+        for( var indexKey in theEcosystem )
+        {
+            var thisLifeform = theEcosystem[indexKey];
+            var numAlive = liveNeighbors( thisLifeform );
+            var IamAlive = thisLifeform.alive;
+            if ( IamAlive == true && numAlive != 2 && numAlive != 3 ) thisLifeform.nextState = false;   // die if overcrowded or underpopulated
+            if ( IamAlive == false && numAlive == 3) thisLifeform.nextState = true;                      // regenerate if there is exactly 3
+        }
+    }
+    
+    function advanceToNextState ( )
+    {
+        for( var indexKey in theEcosystem )
+        {
+            var thisLifeform = theEcosystem[indexKey];
+            thisLifeform.alive = thisLifeform.nextState;
+        }    
+    }
+    
+    function refreshEcoSystem()
+    {
+        // call update through javascript remoting
+        VisualizeController.updateLifeforms( function( result ){
+                if ( result )
+                { 
+                    displayEcoSystem( globalCenter, globalSpace ); 
+                }
+                else alert("update Lifeforms returned false");
+        } );
+    }
+
+    function updateAndDisplayEcoSystem( centerPoint, space )
+    {
+        // margin is actually the center
+        var 
+            point = {},
+            marginX = marginY = centerPoint;
+            
+        setNextState();
+        for( var indexKey in theEcosystem )
+        {
+            var thisLifeform = theEcosystem[indexKey];
+            point.x = marginX + space * thisLifeform.me.x; 
+            point.y = marginY + space * thisLifeform.me.y; 
+            showLifeform( point, thisLifeform );
+        }
+        advanceToNextState(  );
+        colorIndex = cycleColors ? ((colorIndex+1) % rainbow.length) : colorIndex;
+    }
+    
+    function displayEcoSystem( centerPoint, space )
+    {
+        // margin is actually the center
+        var 
+            point = {},
+            marginX = marginY = centerPoint;
+            
+        for( var indexKey in theEcosystem )
+        {
+            var thisLifeform = theEcosystem[indexKey];
+                //Position                me;
+                //List<Position>        Neighbors; 
+                //Boolean                alive;
+            point.x = marginX + space * thisLifeform.me.x; 
+            point.y = marginY + space * thisLifeform.me.y; 
+            showLifeform( point, thisLifeform ); 
+        }
+        colorIndex = cycleColors ? ((colorIndex+1) % rainbow.length) : colorIndex;
+    }
+    
+    function debugEcoSystem( aLife )
+    {
+        var myColor = aLife.alive ? aliveColor : deadColor;
+        var space = 78, marginY = 3000, marginX = 3000;
+        var start = {};
+        start.x = marginX + space * aLife.me.x;
+        start.y = marginY + space *  aLife.me.y;
+        
+        myColor = "#00ff00";
+        for (var i = 0; i < 8; i++)
+        {
+            var end = {};
+            
+            if( !aLife.Neighbors[i].x || !aLife.Neighbors[i].y ) 
+            {
+                if (myColor == "#00ff00") myColor = "#ff0000";    // once yellow, stay yellow
+                continue;
+            }
+            end.x = marginX + space * aLife.Neighbors[i].x;
+            end.y = marginY + space *  aLife.Neighbors[i].y;
+            var distance = Math.sqrt( (start.x-end.x)*(start.x-end.x) + (start.y-end.y)*(start.y-end.y) );
+            if (distance > 1.5 * space) myColor = "#ffff00";
+            drawSegment(start, end, 2, rainbow[i]);
+        }
+        drawCircle( start, circleRadius, circleOutline, OutlineColor, myColor);
+    }
+    
+    function showLifeform( point, aLife )
+    {
+        var myColor = aLife.alive ? aliveColor : deadColor;
+        var connectColor = rainbow[ colorIndex ];
+                    
+        if( aLife.Neighbors[0].x != null || aLife.Neighbors[0].y != null) drawToEast ( point, connectColor );
+        if( aLife.Neighbors[1].x != null || aLife.Neighbors[1].y != null) drawToNE   ( point, connectColor );
+        if( aLife.Neighbors[2].x != null || aLife.Neighbors[2].y != null) drawToNorth( point, connectColor );       
+        if( aLife.Neighbors[3].x != null || aLife.Neighbors[3].y != null) drawToNW   ( point, connectColor );        
+        if( aLife.Neighbors[4].x != null || aLife.Neighbors[4].y != null) drawToWest ( point, connectColor );
+        if( aLife.Neighbors[5].x != null || aLife.Neighbors[5].y != null) drawToSW   ( point, connectColor );          
+        if( aLife.Neighbors[6].x != null || aLife.Neighbors[6].y != null) drawToSouth( point, connectColor );
+        if( aLife.Neighbors[7].x != null || aLife.Neighbors[7].y != null) drawToSE   ( point, connectColor ); 
+        drawCircle( point, circleRadius, circleOutline, OutlineColor, myColor); 
+    }
+    
+    function liveNeighbors( aLife )
+    {
+        if ( aLife == null ) return 0;
+        var theCount = 0;
+        for ( var i = 0; i < 8; i++ )
+        {
+            if ( aLife.NeighborIndx[i] == null ) 
+            {
+                continue;
+            }
+        if( theEcosystem[ aLife.NeighborIndx[i] ].alive ) theCount++;
+        }
+        return theCount;
+    }
+    
+    ///////////////////////
+    // Draw Functions
+    ///////////////////////
+    
+    function drawBox()
+    {
+        var c=document.getElementById("myCanvas");
+        var ctx=c.getContext("2d");
+        ctx.rect(20,20,150,100);
+        ctx.stroke();
+    }
+    
+    function drawCircle( point, radius, thickness, outline, fill)
+    {
+      var 
+          canvas = document.getElementById('myCanvas')
+          context = canvas.getContext('2d');
+
+          context.beginPath();
+          context.arc(point.x, point.y, radius, 0, 2 * Math.PI, false);
+          if (fill) 
+          {
+              context.fillStyle = fill;
+              context.fill();
+          }
+          context.lineWidth = thickness;
+          context.strokeStyle = outline;
+          context.stroke();
+    }
+    
+    function drawSegment(start, end, thickness, color)
+    {
+        var theCanvas=document.getElementById("myCanvas");
+        var ctx=theCanvas.getContext("2d");
+        ctx.beginPath();
+        ctx.moveTo(start.x,start.y);
+        ctx.lineTo(end.x,end.y);
+        ctx.lineWidth = thickness;
+        ctx.strokeStyle = color; 
+        ctx.stroke();
+    }
+
+    function drawLine(point, length, angle, thickness, color)
+    {
+        var radians = (angle * Math.PI) / 180;
+        var end = {};
+        end.x = point.x + length * Math.cos(radians);
+        end.y = point.y - length * Math.sin(radians);
+        drawSegment(point, end, thickness, color);
+        return end;
+    }
+    
+    function drawToEast( point, color )
+    {
+        var start = {};
+        start.x = point.x + gridX * segment;
+        start.y = point.y;
+        drawLine( start, gridX * segment, 0, 2, color );    // connector
+        start.y -= gridY * segment / 4;
+        drawLine( start, gridY * segment / 2, -90, 2, color );    // connector end
+        start.x += gridX * segment;
+        drawLine( start, gridY * segment / 2, -90, 2, color );    // connector end
+    }
+    
+    function drawToWest( point, color )
+    {
+        var start = {};
+        start.x = point.x - gridX * segment;
+        start.y = point.y;
+        drawLine( start, gridX * segment, 180, 2, color );    // connector
+        start.y -= gridY * segment / 4;
+        drawLine( start, gridY * segment / 2, -90, 2, color );    // connector end
+        start.x -= gridX * segment;
+        drawLine( start, gridY * segment / 2, -90, 2, color );    // connector end
+    }
+    
+    function drawToSouth( point, color )
+    {
+        var start = {};
+        start.x = point.x;
+        start.y = point.y + gridY * segment;
+        drawLine( start, gridX * segment, 270, 2, color );    // connector
+        start.x += gridX * segment / 4;
+        drawLine( start, gridY * segment / 2, 180, 2, color );    // connector end
+        start.y += gridY * segment;
+        drawLine( start, gridY * segment / 2, 180, 2, color );    // connector end
+    }
+    
+    function drawToNorth( point, color )
+    {
+
+        var start = {};
+        start.x = point.x;
+        start.y = point.y - gridY * segment;
+        drawLine( start, gridX * segment, 90, 2, color );    // connector
+        start.x += gridX * segment / 4;
+        drawLine( start, gridY * segment / 2, 180, 2, color );    // connector end
+        start.y -= gridY * segment;
+        drawLine( start, gridY * segment / 2, 180, 2, color );    // connector end
+    }
+    
+    function drawToSE( point, color )
+    {
+        var start = {}, endCap = {}; 
+        var len = segment * Math.sqrt(2.0);
+        start.x = point.x + (gridX * len) * Math.cos(radians45);
+        start.y = point.y + (gridY * len) * Math.sin(radians45);
+        drawLine( start, gridX * len, -45, 2, color );    // connector
+        endCap.x = start.x - (gridX * len / 4) * Math.cos(radians45);
+        endCap.y = start.y + (gridY * len / 4) * Math.sin(radians45);
+        drawLine( endCap, gridY * len / 2, 45, 2, color );    // connector end
+        start.x += (gridX * len) * Math.cos(radians45);
+        start.y += (gridY * len) * Math.cos(radians45);
+        drawLine( start, gridY * len / 4, 180, 2, color );    // connector end
+        drawLine( start, gridY * len / 4, 90, 2, color );    // connector end
+    }
+    
+    function drawToNW( point, color )
+    {
+        var start = {}, endCap = {};
+        var len = segment * Math.sqrt(2.0); 
+        start.x = point.x - (gridX * len) * Math.cos(radians45);
+        start.y = point.y - (gridY * len) * Math.sin(radians45);
+        drawLine( start, gridX * len, 135, 2, color );    // connector
+        endCap.x = start.x - (gridX * len / 4) * Math.cos(radians45);
+        endCap.y = start.y + (gridY * len / 4) * Math.sin(radians45);
+        drawLine( endCap, gridY * len / 2, 45, 2, color );    // connector end
+        start.x -= (gridX * len) * Math.cos(radians45);
+        start.y -= (gridY * len) * Math.cos(radians45);
+        drawLine( start, gridY * len / 4, 0, 2, color );    // connector end
+        drawLine( start, gridY * len / 4, -90, 2, color );    // connector end
+    }
+    
+    function drawToSW( point, color )
+    {
+        var start = {}, endCap = {};
+        var len = segment * Math.sqrt(2.0);  
+        start.x = point.x - (gridX * len) * Math.cos(radians45);
+        start.y = point.y + (gridY * len) * Math.sin(radians45);
+        drawLine( start, gridX * len, -135, 2, color );    // connector
+        endCap.x = start.x - (gridX * len / 4) * Math.cos(radians45);
+        endCap.y = start.y - (gridY * len / 4) * Math.sin(radians45);
+        drawLine( endCap, gridY * len / 2, -45, 2, color );    // connector end
+        start.x -= (gridX * len) * Math.cos(radians45);
+        start.y += (gridY * len) * Math.cos(radians45);
+        drawLine( start, gridY * len / 4, 0, 2, color );    // connector end
+        drawLine( start, gridY * len / 4, 90, 2, color );    // connector end
+    }
+    
+    function drawToNE( point, color )
+    {
+        var start = {}, endCap = {};
+        var len = segment * Math.sqrt(2.0); 
+        start.x = point.x + (gridX * len) * Math.cos(radians45);
+        start.y = point.y - (gridY * len) * Math.sin(radians45);
+        drawLine( start, gridX * len, 45, 2, color );    // connector
+        endCap.x = start.x - (gridX * len / 4) * Math.cos(radians45);
+        endCap.y = start.y - (gridY * len / 4) * Math.sin(radians45);
+        drawLine( endCap, gridY * len / 2, -45, 2, color );    // connector end
+
+        start.x += (gridX * len) * Math.cos(radians45);
+        start.y -= (gridY * len) * Math.cos(radians45);
+        drawLine( start, gridY * len / 4, -90, 2, color );    // connector end
+        drawLine( start, gridX * len / 4, 180, 2, color );    // connector end
+    }
+    
+</script>
+    <div style="width:7000px; height:7000px;">
+
+    <canvas id="myCanvas" style="position:absolute; width:6000px; height:6000px; z-index:200;" height="6000px" width="6000px"></canvas>
+    </div>
+
+</apex:page>
